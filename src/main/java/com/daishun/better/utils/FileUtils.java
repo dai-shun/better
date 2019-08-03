@@ -1,5 +1,6 @@
 package com.daishun.better.utils;
 
+import com.daishun.better.exception.BetterException;
 import lombok.SneakyThrows;
 
 import java.io.File;
@@ -30,6 +31,17 @@ public class FileUtils extends org.apache.commons.io.FileUtils {
             return relativePath.substring(1, relativePath.length());
         } else {
             return relativePath;
+        }
+    }
+
+    public static void requireEmptyDir(File dir) {
+        if (!dir.exists()) {
+            throw new BetterException("%s not exist", dir.getName());
+        } else {
+            File[] files = dir.listFiles();
+            if (files != null && files.length != 0) {
+                throw new BetterException("require a empty directory,but %s is not empty!", dir.getName());
+            }
         }
     }
 }

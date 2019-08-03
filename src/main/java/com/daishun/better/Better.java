@@ -1,13 +1,16 @@
 package com.daishun.better;
 
-import com.alibaba.fastjson.JSON;
 import com.daishun.better.dto.BetterConfig;
 import com.daishun.better.exception.BetterException;
 import com.daishun.better.utils.FileUtils;
 import com.daishun.better.utils.GitUtils;
 import lombok.SneakyThrows;
-import org.eclipse.jgit.util.StringUtils;
+import org.apache.commons.cli.*;
+import org.w3c.dom.Document;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 
+import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -20,78 +23,136 @@ import java.util.UUID;
  */
 public class Better {
 
-    private static final String CHARSET = StandardCharsets.UTF_8.name();
-
     public static void main(String[] args) {
-        String localPath = FileUtils.getUserDir();
-        File projectDir = FileUtils.getFile(localPath);
-        if (!projectDir.exists()) {
-            throw new BetterException("%s not exist", projectDir.getName());
-        } else {
-            File[] files = projectDir.listFiles();
-            if (files != null && files.length != 0) {
-                throw new BetterException("require a empty directory,but %s is not empty!", projectDir.getName());
-            }
-        }
-        BetterConfig config = getConfig(projectDir);
-        String exampleProjectName = config.getTemplate();
-        String examplePackageName = exampleProjectName.replaceAll("\\-", "");
-        String projectName = config.getArtifactId();
-        String packageName = projectName.replaceAll("\\-", "");
+        parseOption(args);
+    }
+
+    private static void parseOption(String[] args) {
+        Options options = createOptions();
+        BetterConfig config = getConfig(options, args);
+        String projectPath = config.getProjectPath();
+        File projectDir = FileUtils.getFile(projectPath);
+        FileUtils.requireEmptyDir(projectDir);
         //初始化项目
-        initProject(localPath, exampleProjectName);
-        //替换项目模板
-        Map<String, String> replaceMap = new HashMap<>();
-        replaceMap.put(exampleProjectName, projectName);
-        replaceMap.put(examplePackageName, packageName);
-        replaceMap.put("com\\.daishun", config.getGroupId());
-        replaceMap.put("com" + File.separator + "daishun", config.getGroupId().replaceAll("\\.", File.separator));
-        replaceAll(localPath, projectDir, replaceMap);
+        initProject(projectPath, config.getTemplate());
+        resolveFiles(config);
+    }
+
+    private static Options createOptions() {
+        Options options = new Options();
+        Option opt = new Option("h", "help", false, "Print help");
+        opt.setRequired(false);
+        options.addOption(opt);
+
+        opt = new Option("G", "groupId", true, "Maven groupId");
+        opt.setRequired(true);
+        options.addOption(opt);
+
+        opt = new Option("A", "artifactId", true, "Maven artifactId");
+        opt.setRequired(true);
+        options.addOption(opt);
+
+        opt = new Option("T", "template", true, "Spring template name");
+        opt.setRequired(true);
+        options.addOption(opt);
+        return options;
     }
 
     @SneakyThrows
-    private static BetterConfig getConfig(File projectDir) {
-        File file = FileUtils.getFile(projectDir, "better.json");
+    private static BetterConfig getConfig(Options options, String[] args) {
+        HelpFormatter help = new HelpFormatter();
+        help.setWidth(110);
+        CommandLine commandLine = null;
+        CommandLineParser parser = new PosixParser();
+        commandLine = parser.parse(options, args);
+        if (commandLine.hasOption('h')) {
+            help.printHelp("better", options, true);
+        }
+        Option[] opts = commandLine.getOptions();
         BetterConfig config = new BetterConfig();
-        if (file.exists()) {
-            String configJson = FileUtils.readFileToString(file, CHARSET);
-            config = JSON.parseObject(configJson, BetterConfig.class);
+        if (opts != null) {
+            for (Option option : opts) {
+                String name = option.getLongOpt();
+                String value = commandLine.getOptionValue(name);
+                if ("groupId".equals(name)) {
+                    config.setGroupId(value);
+                } else if ("artifactId".equals(name)) {
+                    config.setArtifactId(value);
+                } else if ("template".equals(name)) {
+                    config.setTemplate(value);
+                }
+            }
         }
-        if (StringUtils.isEmptyOrNull(config.getGroupId())) {
-            config.setGroupId("com.daishun");
-        }
-        if (StringUtils.isEmptyOrNull(config.getArtifactId())) {
-            config.setTemplate(projectDir.getName());
-        }
-        if (StringUtils.isEmptyOrNull(config.getTemplate())) {
-            config.setTemplate("spring-mybatis-simple-example");
-        }
+        config.setProjectPath(FileUtils.getUserDir());
         return config;
     }
 
+
+    private static void resolveFiles(BetterConfig config) {
+        Map<String, String> replaceMap = getReplaceMap(config.getProjectPath(), config);
+        replaceAll(config.getProjectPath(), new File(config.getProjectPath()), replaceMap);
+    }
+
     @SneakyThrows
-    private static void initProject(String localPath, String exampleName) {
+    private static Map<String, String> getReplaceMap(String templatePath, BetterConfig config) {
+        File pomFile = FileUtils.getFile(templatePath, "pom.xml");
+        Document document = DocumentBuilderFactory.newInstance()
+                .newDocumentBuilder()
+                .parse(FileUtils.openInputStream(pomFile));
+        String text = document.getTextContent();
+        Node projectNode = document.getElementsByTagName("project").item(0);
+        NodeList nodeList = projectNode.getChildNodes();
+        String groupId = config.getGroupId();
+        String artifactId = config.getArtifactId();
+        for (int i = 0; i < nodeList.getLength(); i++) {
+            Node node = nodeList.item(i);
+            if ("artifactId".equals(node.getNodeName())) {
+                artifactId = node.getTextContent().trim();
+            } else if ("groupId".equals(node.getNodeName())) {
+                groupId = node.getTextContent().trim();
+            }
+        }
+        Map<String, String> replaceMap = new HashMap<>();
+        replaceMap.put(artifactId, config.getArtifactId());
+        replaceMap.put(artifactId.replaceAll("\\-", ""), config.getArtifactId().replaceAll("\\-", ""));
+        replaceMap.put(groupId.replaceAll("\\.", "\\\\\\."), config.getGroupId());
+        String templateGroupPath = groupId.replaceAll("\\.", File.separator);
+        String newGroupPath = config.getGroupId().replaceAll("\\.", File.separator);
+        replaceMap.put(templateGroupPath, newGroupPath);
+        return replaceMap;
+    }
+
+    @SneakyThrows
+    private static void initProject(String projectPath, String template) {
         String uuid = UUID.randomUUID().toString();
-        File tempDir = new File(localPath, "." + uuid);
+        File tempDir = new File(projectPath, "." + uuid);
         try {
-            tempDir.mkdir();
+            if (!tempDir.mkdir()) {
+                throw new BetterException("init project fail!");
+            }
             GitUtils.cloneRepository(tempDir.getAbsolutePath(), "https://github.com/dai-shun/spring-examples.git");
-            File destFile = FileUtils.getFile(localPath);
-            for (File file : tempDir.listFiles()) {
-                //只保留一个模板文件夹
-                if (!exampleName.equals(file.getName())) {
+            File destFile = FileUtils.getFile(projectPath);
+            File[] templates = tempDir.listFiles();
+            if (templates == null) {
+                throw new BetterException("cannot find any template!");
+            }
+            for (File file : templates) {
+                if (!template.equals(file.getName())) {
                     FileUtils.deleteQuietly(file);
                 }
             }
-            if (tempDir.listFiles() == null || tempDir.listFiles().length == 0) {
-                throw new BetterException("指定的模板%s不存在", exampleName);
+            File srcFile = FileUtils.getFile(tempDir, template);
+            if (srcFile == null) {
+                throw new BetterException("template %s not exist!", template);
             }
-            File srcFile = FileUtils.getFile(tempDir, exampleName);
-            for (File fromFile : srcFile.listFiles()) {
-                File toFile = FileUtils.getFile(destFile, fromFile.getName());
-                FileUtils.move(fromFile, toFile);
+            File[] templateFiles = srcFile.listFiles();
+            if (templateFiles != null) {
+                for (File fromFile : templateFiles) {
+                    File toFile = FileUtils.getFile(destFile, fromFile.getName());
+                    FileUtils.move(fromFile, toFile);
+                }
             }
-            FileUtils.deleteQuietly(FileUtils.getFile(destFile, exampleName));
+            FileUtils.deleteQuietly(FileUtils.getFile(destFile, template));
         } finally {
             if (tempDir.exists()) {
                 FileUtils.deleteDirectory(tempDir);

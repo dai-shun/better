@@ -15,4 +15,6 @@ public class BetterConfig {
 
     private String template;
 
+    private String projectPath;
+
 }
