@@ -6,7 +6,7 @@
     <artifactId>better</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>better</name>
-    <description>Demo project for Spring Boot</description>
+    <description>A Java scaffold for building Java projects quickly</description>
 
     <properties>
         <java.version>1.8</java.version>
@@ -62,33 +62,20 @@
                 <artifactId>appassembler-maven-plugin</artifactId>
                 <version>2.0.0</version>
                 <configuration>
-                    <!-- 生成linux, windows两种平台的执行脚本 -->
                     <platforms>
                         <platform>windows</platform>
                         <platform>unix</platform>
                     </platforms>
-                    <!-- 根目录 -->
                     <assembleDirectory>${project.build.directory}/${project.name}</assembleDirectory>
-                    <!-- 打包的jar，以及maven依赖的jar放到这个目录里面 -->
                     <repositoryName>lib</repositoryName>
-                    <!-- 可执行脚本的目录 -->
                     <binFolder>bin</binFolder>
-                    <!-- lib目录中jar的存放规则，默认是${groupId}/${artifactId}的目录格式，flat表示直接把jar放到lib目录 -->
                     <repositoryLayout>flat</repositoryLayout>
                     <encoding>UTF-8</encoding>
                     <logsDirectory>logs</logsDirectory>
                     <tempDirectory>tmp</tempDirectory>
                     <programs>
                         <program>
-                            <!-- 启动类 修改成自己的类-->
                             <mainClass>com.daishun.better.Better</mainClass>
-                            <jvmSettings>
-                                <extraArguments>
-                                    <extraArgument>-server</extraArgument>
-                                    <extraArgument>-Xmx2G</extraArgument>
-                                    <extraArgument>-Xms2G</extraArgument>
-                                </extraArguments>
-                            </jvmSettings>
                         </program>
                     </programs>
                 </configuration>

@@ -2,13 +2,13 @@ package com.daishun.better;
 
 import com.alibaba.fastjson.JSON;
 import com.daishun.better.dto.BetterConfig;
+import com.daishun.better.exception.BetterException;
 import com.daishun.better.utils.FileUtils;
 import com.daishun.better.utils.GitUtils;
 import lombok.SneakyThrows;
 import org.eclipse.jgit.util.StringUtils;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -22,9 +22,17 @@ public class Better {
 
     private static final String CHARSET = StandardCharsets.UTF_8.name();
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
         String localPath = FileUtils.getUserDir();
         File projectDir = FileUtils.getFile(localPath);
+        if (!projectDir.exists()) {
+            throw new BetterException("%s not exist", projectDir.getName());
+        } else {
+            File[] files = projectDir.listFiles();
+            if (files != null && files.length != 0) {
+                throw new BetterException("require a empty directory,but %s is not empty!", projectDir.getName());
+            }
+        }
         BetterConfig config = getConfig(projectDir);
         String exampleProjectName = config.getTemplate();
         String examplePackageName = exampleProjectName.replaceAll("\\-", "");
@@ -64,7 +72,7 @@ public class Better {
     @SneakyThrows
     private static void initProject(String localPath, String exampleName) {
         String uuid = UUID.randomUUID().toString();
-        File tempDir = new File(localPath, "."+uuid);
+        File tempDir = new File(localPath, "." + uuid);
         try {
             tempDir.mkdir();
             GitUtils.cloneRepository(tempDir.getAbsolutePath(), "https://github.com/dai-shun/spring-examples.git");
@@ -76,7 +84,7 @@ public class Better {
                 }
             }
             if (tempDir.listFiles() == null || tempDir.listFiles().length == 0) {
-                throw new FileNotFoundException(String.format("指定的模板%s不存在", exampleName));
+                throw new BetterException("指定的模板%s不存在", exampleName);
             }
             File srcFile = FileUtils.getFile(tempDir, exampleName);
             for (File fromFile : srcFile.listFiles()) {
