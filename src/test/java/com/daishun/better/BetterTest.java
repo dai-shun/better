@@ -13,9 +13,6 @@ public class BetterTest {
 
     @org.junit.Test
     public void main() throws IOException {
-        FileUtils.cleanDirectory(new File("/Users/daishun/workspace/tengsaw/mybatis-plugins-example"));
-        String args = "-G org.apache -A test-s -T spring-mybatis-simple-example";
-        System.setProperty("user.dir", "/Users/daishun/workspace/tengsaw/mybatis-plugins-example");
-        Better.main(args.split("\\ "));
+
     }
 }
