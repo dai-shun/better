@@ -4,6 +4,7 @@ import com.daishun.better.dto.BetterConfig;
 import com.daishun.better.exception.BetterException;
 import com.daishun.better.utils.FileUtils;
 import com.daishun.better.utils.GitUtils;
+import com.daishun.better.utils.StringUtils;
 import lombok.SneakyThrows;
 import org.apache.commons.cli.*;
 import org.w3c.dom.Document;
@@ -82,6 +83,9 @@ public class Better {
                     config.setTemplate(value);
                 }
             }
+        }
+        if (StringUtils.isEmpty(config.getTemplate())) {
+            config.setTemplate("spring-mybatis-simple-example");
         }
         config.setProjectPath(FileUtils.getUserDir());
         return config;
